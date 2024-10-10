@@ -123,3 +123,8 @@ cython_debug/
 
 # Virtual environment
 venv/
+
+# Images
+*.png
+*.jpg
+*.jpeg
