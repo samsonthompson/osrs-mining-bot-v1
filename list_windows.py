@@ -1,10 +1,19 @@
-import pygetwindow as gw
+import cv2  # Import OpenCV
 
-def list_window_titles():
-    windows = gw.getAllTitles()
-    for title in windows:
-        if title:  # Filter out empty titles
-            print(title)
+def list_video_capture_devices():
+    index = 0
+    arr = []
+    while True:
+        cap = cv2.VideoCapture(index)
+        if not cap.read()[0]:
+            break
+        else:
+            arr.append(index)
+        cap.release()
+
+        index += 1
+    return arr
 
 if __name__ == "__main__":
-    list_window_titles()
+    devices = list_video_capture_devices()
+    print("Available video capture devices:", devices)
