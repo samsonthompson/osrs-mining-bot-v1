@@ -1,0 +1,320 @@
+Open in app
+Search
+Write
+
+Samson M Thompson
+Get unlimited access to the best of Medium for less than $1/week.
+Become a member
+
+
+How I made a Runescape bot.
+Joshua Gornall
+Joshua Gornall
+
+·
+Follow
+
+10 min read
+·
+May 17, 2021
+68
+
+
+1
+
+
+
+
+
+My attempt to get 99 mining in the MMORPG Runescape using TensorFlow, OpenCV, and human mouse movements. This guide is purely for educational purposes.
+
+
+Power-mining 3 iron ores in Al-Kharid
+
+Power-mining in the mining guild
+Introduction
+I estimate I spent quite literally thousands of hours playing Runescape between 2005 and 2012. I have fond memories of the game but do not play anymore for various reasons.
+
+I played around with making rudimentary colour bots in the latter stage and I wanted to achieve my childhood obsession of accomplishing 99 in some skill, so I refined my approach to create a more advanced colour bot. I decided to aim for 99 mining, which takes about 320 to 400 hours of training in free-to-play worlds.
+
+
+99 Mining Skill Cape
+Why bot a game that I don’t actually play if I don’t make money off of it? I was mainly in it for the challenge. I also resent the game for being engineered to be addictive and thus saw this is an opportunity for petty revenge for all the hours I’ve spent and arguably wasted playing it as a kid.
+
+It’s really easy to whip up a bad colour bot in Runescape. In 15 minutes, you could probably write an iron power-miner bot that clicks on nearby brown pixels. I actually recommend you to try this. Chances are, any such bot is going to be extremely unreliable. The challenge is in writing a bot that behaves in a human-like way to avoid ban, is reliable enough to play for 5+ hours straight, avoids random events, and is as efficient as a human player.
+
+I envision that you could make a bot for other MMORPGs including WoW following similar techniques. While other MMORPGs have more sophisticated graphics, Runescape is notorious for its advanced bot detection systems.
+
+I thus set out to make a bot that fulfils the following requirements:
+
+Bot Requirements
+Screen scraping only: The majority of current bots available online (via Tribot, PowerBot, Villavu, and so on) use injection, mirroring, and OpenGL hooking. These are all more susceptible to being detected.
+Efficiency: The XP/hour rate should exceed 30k in the case of mining 2 iron ores, 40k in the case of mining 3 ores.
+Reliability: The bot should be able to run for 5 hours without interruption.
+Versatility: The bot should be able to mine in any game location without requiring manual adjustment.
+Avoiding ban:
+Human mouse movements: The mouse should follow organic, human-like paths.
+Random events: Random events should be dismissed. Even though random events are now optional, ignoring them is a huge red flag.
+Avoid other players: If there are other players competing for the same mining spot, hop worlds to avoid suspicion.
+These were my requirements only for a minimum viable product. I later added a variety of features to further enhance the bot. As a spoiler, I’ll note that I eventually got banned at 87 mining.
+
+Overview
+Before diving into specific details, I want to provide an overview of the languages and libraries I was working with.
+
+Language
+I wrote all of the bot code in Java. TensorFlow and OpenCV, the two libraries I used, both have Java wrappers. It is fast and cross-platform. Furthermore, the java.awt.Robot class provided an extremely convenient and fast way to capture the screen (<2 ms) as well as manipulate the mouse.
+
+C++ would have been a reasonable alternative, but capturing the screen and manipulating the mouse was more of a hassle. The other alternative was Python, which would have made OpenCV and TensorFlow usage easier, but I haven’t explored how to capture the screen and manipulate the mouse. It might also have lacked the necessary speed.
+
+Libraries
+TensorFlow
+
+TensorFlow is a machine learning library developed by Google. I used it to train a convolutional neural network for object detection.
+
+Prior to using TensorFlow, I tried to go with a more traditional feature-detection algorithm for object detection. I looked into a variety of OpenCV’s object detection algorithms such as SIFT, SURF, and Haar. I tried to train a Haar cascade classifier but the training did not provide the results I wanted.
+
+OpenCV
+
+OpenCV is the open-source standard for computer vision. I used it primarily for object tracking. Surprisingly, I did not use OpenCV for object detection, since this was be done via a TensorFlow model.
+
+Part 1 : Object Detection
+
+High precision in detecting the various ores
+
+Differentiates between ores
+Since everything in Runescape is very consistent in appearance, objects should be detectable with high precision. I used TensorFlow to train a convolutional neural network to recognise these objects. A convolutional neural network is a type of neural network that is especially good for computer vision. You can read more about them on Wikipedia.
+
+I followed this tutorial to train my custom TensorFlow object detector.
+
+To collect images, I wrote a script that automatically takes a screenshot every 200 milliseconds. I ran this script while mining iron ore, making sure to rotate the camera and move around so that I captured iron ore from a variety of angles and distances. I collected 200 images, with each image having 1–4 ores. I also labelled the depleted ores.
+
+Training:
+I trained my model for a total of 50,000 steps. I periodically used the draw_boxes.ipynb Jupyter notebook script from the TensorFlow object detector tutorial to visually validate my trained model. This script exported my model so that it could be loaded and then it drew boxes around the detected objects.
+
+The code for object detection in Java using the same model was a little different from the code in Python. To use the model in Java, I first needed to export one of the checkpoints using the instructions from the tutorial. I then tweaked the official example from TensorFlow to run the model.
+
+Running the TensorFlow object detection model averaged about 75 ms per image with my Nvidia 840M GPU, and about 200ms using just my i7 CPU.
+
+I’d also like to note that there was very little TensorFlow and OpenCV documentation for Java, and finding the right resources was a headache at times. Just installing TensorFlow with GPU support, adding TensorFlow to Eclipse, and installing OpenCV for Java took me a long time.
+
+Part 2 : Object Tracking
+With object detection in place, I unlocked the ability to bot a number of Runescape tasks. However, object detection is even better when complemented with object tracking. Since there were multiple detected objects and I needed to keep track of which ore I was currently mining, I needed to implement object tracking.
+
+I experimented with several of OpenCV’s tracking algorithms. This was a great place to practice test-driven development. I captured a video of myself mining, and wrote tests to make sure that the trackers did not get lost. Here is an example of what object tracking looked like:
+
+
+Demonstration of object tracking. Each box represents a tracker. The colours are as follows: green — iron ore, red — depleted ore, white — unrecognised.
+I ended up using OpenCV’s Boosting tracker. This only worked for frame rates over 10 fps — below 10 fps, trackers would get lost. With GPU support, object detection took only 75ms, so there was no issue.
+
+Avoiding Ban
+There is hardly a point to developing a good bot if you lose your account in the process.
+
+Human Mouse Movements
+Nobody really seems to know whether Runescape tracks players’ mouse movement. Since they certainly have the power to, we must assume they do. So the question is, how can we mimic human mouse movement?
+
+My first idea was to use some kind of Bezier curve or spline to model the curve. However, after tracking my own mouse movement and plotting it, it immediately became obvious that this would not do. I scanned through SIMBA’s mouse motion algorithm, which seems to follow a similar approach (with some additional features, such as intentionally overshooting your target). However, I still wasn’t a fan of this approach.
+
+My next approach was to record my own mouse movements and replay the movements. I wrote a very simple bash script to record my mouse coordinates and timestamps every 5 milliseconds. I did not find a way to record clicks using bash. I got around this by counting anything where the mouse stays stationary for more than 20 milliseconds as a click. This is not a perfect approach, but for my purposes, the resulting error is probably marginal.
+
+I accumulated over 200 MB of mouse data while running this script every start-up for a few days. The 200 MB of mouse data translated to 25,000 separate mouse paths. I wrote a Python script to parse and create a visualisation of this data.
+
+Now, to move the mouse from point A to B, I first measured the distance and direction I need to move the mouse. Say this distance was 250 pixels and the direction was 30 degrees. I choose one of my recorded paths of length 250. Suppose the the recorded path’s direction was 67 degrees. I first offset the recorded path to start from point A, then rotated it by -37 degrees such that it would end on point B. Finally, to add another layer of randomness, I applied another transformation that preserves the starting and ending points.
+
+I was very satisfied with the resulting mouse behaviour. Should I ever return to this project, I will try to use machine learning to generate human looking mouse behaviour.
+
+Random Event Detection
+
+Dismissing the sandwich lady random event
+In an ideal world, I could train object detectors for each random event. However, collecting and labelling images for 23 different events would have taken far too long. I instead devised a “hack” to detect when random events speak to you by the yellow text box above their heads. If I detected a yellow text box, I would right click its centre and check whether the right-click options include a dismiss option. It’s not a perfect approach — I would occasionally click on players who would speak to me, but again, for my purposes, the hack was good enough.
+
+A logical extension of this would be to create a Runescape chatbot that would respond to other players that try to engage in conversion. This would make you appear far more human. The biggest challenge would be in gathering the required domain-specific data to train such a chatbot. We could use Reddit data for training, but chances are that in-game conversations differ from Reddit ones. Additionally, we would need to implement some type of OCR (optical character recognition) to read what other players are saying, as well as type our response in a convincingly human way.
+
+Hopping worlds
+If another player appeared and competed for my mining spot, it was best to get out of there. I didn’t want anyone reporting me. To do this, I kept track of how many of the last 30 mining attempts were successful. If the percentage ever dipped below 70%, I hopped worlds. Who would have thought LeetCode questions would be useful?
+
+Maximising Efficiency
+I won’t go into depth on the bot’s game logic, since anyone reading this probably wants to make his or her own custom bot. I studied my own playing style and tried to mimic it as closely as possible.
+
+Multi-threading
+
+To maximise efficiency, I had to hover and right click with the mouse over the next iron ore to drop while also tracking the iron ore being mined. Fortunately, in my case there was no risk of race conditions, deadlock, or starvation, so the implementation was straightforward.
+
+My bot achieved 41.5k XP/hour while mining 3 adjacent rocks and 32k XP/hour while mining 2 adjacent rocks. These rates are comparable (if not higher) than the rate of mining without a bot. Multi-threading improved the efficiency by about 15%, since cursor movement and object tracking were not blocking each other.
+
+Conclusion
+I got banned at 87 mining. RIP. Runescape intentionally delays banning bots for anywhere up to 6 months in order to make it hard to pinpoint the flaw in the bot, so I cannot say with certainty how my bot was detected.
+
+However, I still learned immensely from this project. I ended up writing bash scripts, cron tasks, learning about convolutional neural networks, and working with multi-threading in Java — things I did not anticipate doing. There are still many improvements to be made and many other tasks to be automated.
+
+Please do not forget the risks involved in creating or using a bot in any game. Even with the best bot, playing without breaks, at suspicious hours, or monotonously might alert Jagex’s bot watch system. There is also a discussion to be had about the ethics of bots. Considering that most MMORPGs are designed to be psychologically addictive, I have no qualms about automating the mindless parts.
+
+For a more technical report, including the TensorFlow model, Java code, and scripts used in my bot, visit my GitHub repo.
+
+
+At least I got to mine rune ore
+Thanks for reading!
+
+Runescape
+Machine Learning
+Python
+Java
+Open Source
+68
+
+
+1
+
+
+
+
+Joshua Gornall
+Written by Joshua Gornall
+5 Followers
+Full Stack Software Dev at Theodo
+
+Follow
+
+More from Joshua Gornall
+If You Know How To Cook, You Understand Machine Learning….
+Joshua Gornall
+Joshua Gornall
+
+If You Know How To Cook, You Understand Machine Learning….
+When you’re asked by someone what is Machine Learning? Use this analogy to cooking. It has really resonated with people and helped them…
+May 15, 2021
+9
+
+
+5 Dysfunctions of a team — my take.
+Joshua Gornall
+Joshua Gornall
+
+5 Dysfunctions of a team — my take.
+In his book, Lencioni describes a set of dysfunctional behaviours that can negatively impact teams. First, he tells a story about a…
+Mar 30, 2022
+97
+
+
+See all from Joshua Gornall
+Recommended from Medium
+5 AI Projects You Can Build This Weekend (with Python)
+Shaw Talebi
+Shaw Talebi
+
+in
+
+Towards Data Science
+
+5 AI Projects You Can Build This Weekend (with Python)
+From beginner-friendly to advanced
+
+Oct 9
+2.4K
+33
+
+
+I used OpenAI’s o1 model to develop a trading strategy. It is DESTROYING the market
+Austin Starks
+Austin Starks
+
+in
+
+DataDrivenInvestor
+
+I used OpenAI’s o1 model to develop a trading strategy. It is DESTROYING the market
+It literally took one try. I was shocked.
+
+Sep 15
+3.7K
+104
+
+
+Lists
+
+
+
+Predictive Modeling w/ Python
+20 stories
+·
+1596 saves
+Principal Component Analysis for ML
+Time Series Analysis
+deep learning cheatsheet for beginner
+Practical Guides to Machine Learning
+10 stories
+·
+1941 saves
+
+
+
+Coding & Development
+11 stories
+·
+849 saves
+
+
+
+Natural Language Processing
+1754 stories
+·
+1355 saves
+What is Pydantic and how can it help your next python project?
+Bryson Meiling
+Bryson Meiling
+
+in
+
+Python in Plain English
+
+What is Pydantic and how can it help your next python project?
+For anyone that has been either living under a programming rock you may not have heard of Pydantic…
+
+Oct 6
+312
+4
+
+
+17 Mindblowing Python Automation Scripts I Use Everyday
+Abhay Parashar
+Abhay Parashar
+
+in
+
+The Pythoneers
+
+17 Mindblowing Python Automation Scripts I Use Everyday
+Scripts That Increased My Productivity and Performance
+
+Oct 1
+8.2K
+75
+
+
+Why 500 LeetCode Problems Changed My Life
+Surabhi Gupta
+Surabhi Gupta
+
+in
+
+Code Like A Girl
+
+Why 500 LeetCode Problems Changed My Life
+How I Prepared for DSA and Secured a Role at Microsoft
+
+Sep 26
+2.6K
+57
+
+
+Top 10 Microservices Design Patterns you should know
+Sylvain Tiset
+Sylvain Tiset
+
+Top 10 Microservices Design Patterns you should know
+Earlier I presented one useful design pattern to migrate to a monolithic application to microservices. This pattern is the Strangler Fig…
+Sep 18
+502
+5
+
+
+See more recommendations
