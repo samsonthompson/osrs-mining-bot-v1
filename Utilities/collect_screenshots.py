@@ -6,13 +6,17 @@ from pynput.mouse import Controller, Button
 from pynput.keyboard import Key, Controller as KeyboardController
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(asctime)s - %(message)s')
 
 # Constants
 ROTATIONS = 50  # Number of rotations to complete a 360-degree turn
 DELAY_BETWEEN_ROTATIONS = 0.5  # Delay in seconds between each rotation
-ZOOM_LEVELS = 5  # Number of zoom levels
-ZOOM_DELAY = 0.5  # Delay between zoom actions
+ZOOM_IN_KEY = '['
+ZOOM_OUT_KEY = ']'
+FULL_ZOOM_IN_TAPS = 16
+FULL_ZOOM_OUT_TAPS = 16
+ROTATION_TAPS = 3
+SCREENSHOT_INTERVAL = 5  # Number of rotations between screenshots
 
 mouse = Controller()
 keyboard = KeyboardController()
@@ -28,35 +32,29 @@ def focus_runelite_window():
     logging.error("RuneLite window not found")
     return False
 
-def rotate_camera_clockwise():
-    logging.info("Starting camera rotation")
-    for i in range(ROTATIONS):
-        pyautogui.press('right')
-        logging.info(f"Rotation {i+1}/{ROTATIONS} completed")
-        time.sleep(DELAY_BETWEEN_ROTATIONS)
-    logging.info("Camera rotation complete")
+def zoom_in_full():
+    logging.info("Zooming in fully")
+    for _ in range(FULL_ZOOM_IN_TAPS):
+        pyautogui.press(ZOOM_IN_KEY)
+        time.sleep(0.1)
 
-def zoom_in():
-    logging.info("Zooming in")
-    mouse.press(Button.left)
-    mouse.move(0, -10)  # Adjust this value to change zoom speed
-    mouse.release(Button.left)
-    time.sleep(ZOOM_DELAY)
-
-def zoom_out():
-    logging.info("Zooming out")
-    mouse.press(Button.left)
-    mouse.move(0, 10)  # Adjust this value to change zoom speed
-    mouse.release(Button.left)
-    time.sleep(ZOOM_DELAY)
-
-def perform_zoom_cycle():
-    logging.info("Starting zoom cycle")
-    for _ in range(ZOOM_LEVELS):
-        zoom_in()
-    for _ in range(ZOOM_LEVELS):
-        zoom_out()
-    logging.info("Zoom cycle complete")
+def rotate_and_capture():
+    logging.info("Starting rotation and capture process")
+    zoom_in_full()  # Zoom in fully before taking the first screenshot
+    pyautogui.screenshot('screenshot_0.png')  # Take the first screenshot after zooming in fully
+    logging.info("Taking first screenshot after zooming in fully")
+    
+    for rotation in range(0, ROTATIONS, ROTATION_TAPS):
+        for _ in range(ROTATION_TAPS):
+            pyautogui.press('right')  # Rotate clockwise
+            time.sleep(DELAY_BETWEEN_ROTATIONS)
+        
+        if rotation % SCREENSHOT_INTERVAL == 0:
+            logging.info(f"Taking screenshot at rotation {rotation}")
+            pyautogui.screenshot(f'screenshot_{rotation}.png')
+        
+        if rotation + ROTATION_TAPS >= ROTATIONS:
+            break
 
 def main():
     logging.info("Starting camera control and zoom program")
@@ -65,8 +63,7 @@ def main():
     time.sleep(3)
     
     if focus_runelite_window():
-        perform_zoom_cycle()
-        rotate_camera_clockwise()
+        rotate_and_capture()
     else:
         print("Failed to focus RuneLite window. Please make sure it's running and try again.")
     
